@@ -64,10 +64,7 @@
       touch-action:manipulation;
     }
     button.primary:active { transform:translateY(2px); box-shadow:0 3px 0 var(--accent-dark); }
-    button.ghost { background:transparent; color:var(--muted); border:2px solid rgba(0,0,0,0.06); padding:0.45rem 0.9rem; border-radius:10px; min-height:var(--touch); cursor:pointer; transition: background var(--transition), border-color var(--transition); }
-    button.ghost:hover { background:rgba(47,82,106,0.1); border-color:rgba(47,82,106,0.2); }
-    #clearAllBtn { color:var(--danger); border-color:rgba(255,23,68,0.2); }
-    #clearAllBtn:hover { background:rgba(255,23,68,0.05); border-color:rgba(255,23,68,0.3); }
+    button.ghost { background:transparent; color:var(--muted); border:2px solid rgba(0,0,0,0.06); padding:0.45rem 0.9rem; border-radius:10px; min-height:var(--touch); cursor:pointer; }
 
     /* צבעים לבחירה */
     .colors { display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:center; padding:0.25rem 0; }
@@ -118,32 +115,8 @@
       display:flex; align-items:center; justify-content:space-between;
       background:#b6e4d8; color:var(--muted);
       border-radius:10px; padding:0.45rem 0.6rem; box-shadow: inset 0 2px 8px rgba(120,120,120,0.04);
-      gap:0.6rem;
+      gap:0.6rem; touch-action:pan-y;
       position:relative; overflow:hidden;
-    }
-    .guess-number {
-      background:var(--accent);
-      color:#fff !important;
-      width:32px;
-      height:32px;
-      border-radius:50%;
-      display:flex !important;
-      align-items:center;
-      justify-content:center;
-      font-weight:700;
-      font-size:0.85rem;
-      flex-shrink:0 !important;
-      box-shadow: 0 2px 6px rgba(56,131,134,0.3);
-      min-width:32px;
-      min-height:32px;
-      visibility:visible !important;
-      opacity:1 !important;
-    }
-    .guess-content {
-      display:flex;
-      align-items:center;
-      gap:0.6rem;
-      flex:1;
     }
     .guess-colors-list { display:flex; gap:0.35rem; align-items:center; }
     .guess-color { width:28px; height:28px; border-radius:50%; border:2px solid rgba(81,117,113,0.8); display:inline-block; }
@@ -184,19 +157,12 @@
       #gameBoard{ order:2;}
       #hintBoxOuter{ order:1; margin-bottom:0.5rem;}
       #guesses{ max-height:260px; }
-      /* וידוא שהמספרים גלויים גם במסכי טלפון */
-      .guess-number{ width:30px; height:30px; font-size:0.8rem; flex-shrink:0; }
-    }
-
-    @media (max-width:600px){
-      .guess-number{ width:30px !important; height:30px !important; font-size:0.8rem !important; min-width:30px !important; min-height:30px !important; }
     }
 
     @media (max-width:420px){
       :root{ --touch:44px; --small-touch:36px; --card-padding:0.9rem; --gap:1rem; }
       .guess-color{ width:24px;height:24px; }
       .result{ min-width:48px; }
-      .guess-number{ width:28px !important; height:28px !important; font-size:0.75rem !important; min-width:28px !important; min-height:28px !important; }
     }
 
     /* אנימציות קלות */
@@ -225,7 +191,6 @@
           <div class="hint-balls" id="hintBalls" role="list" aria-label="כדורי רמז"></div>
         </div>
         <button id="resetBtn" class="primary" aria-label="התחל מחדש">התחל מחדש</button>
-        <button id="clearAllBtn" class="ghost" aria-label="נקה הכל" title="מחק את כל ההיסטוריה והשמירה">נקה הכל</button>
       </div>
 
       <!-- Game Board -->
@@ -249,7 +214,7 @@
         <h3>אפשרויות משחק</h3>
 
         <div class="box" id="ballsCountBox">
-          <legend style="font-weight:700; color:var(--muted); text-align:center;">מספר צבעים במשחק</legend>
+          <legend style="font-weight:700; color:var(--muted); text-align:center;">מספר צבעים בסוד המחשב</legend>
           <div class="balls-radio-group" role="radiogroup" aria-label="מספר צבעים">
             <label><input type="radio" name="ballsCount" value="2">2</label>
             <label><input type="radio" name="ballsCount" value="3">3</label>
@@ -290,17 +255,15 @@
   let animationsEnabled = true;
   let secretCode = [];
   let currentGuess = [];
-  let guesses = []; // מערך של {colors:[], bulls, cows, id, guessNumber}
+  let guesses = []; // מערך של {colors:[], bulls, cows, id}
   let revealed = []; // רמזים חשופים
   let vibrationEnabled = true; // ניתן לשנות
-  let currentGuessNumber = 1; // מעקב אחר מספר הניסיון הנוכחי
 
   // ---- DOM ----
   const colorOptionsDiv = document.getElementById('colorOptions');
   const currentDiv = document.getElementById('current');
   const checkBtn = document.getElementById('checkBtn');
   const resetBtn = document.getElementById('resetBtn');
-  const clearAllBtn = document.getElementById('clearAllBtn');
   const undoBtn = document.getElementById('undoBtn');
   const statusDiv = document.getElementById('status');
   const guessesDiv = document.getElementById('guesses');
@@ -316,7 +279,7 @@
   const STORAGE_KEY = 'bulls_game_v1';
   function saveState(){
     try{
-      const state = { ballsCount, allowNoRepeat, secretCode, guesses, revealed, animationsEnabled, currentGuessNumber };
+      const state = { ballsCount, allowNoRepeat, secretCode, guesses, revealed, animationsEnabled };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }catch(e){ console.warn('save failed', e); }
   }
@@ -331,7 +294,6 @@
       guesses = state.guesses || [];
       revealed = state.revealed || new Array(ballsCount).fill(false);
       animationsEnabled = ('animationsEnabled' in state) ? !!state.animationsEnabled : animationsEnabled;
-      currentGuessNumber = state.currentGuessNumber || 1;
       return true;
     }catch(e){ console.warn('load failed', e); return false; }
   }
@@ -431,9 +393,8 @@
 
   // ---- הוספת ניחוש להיסטוריה ----
   function pushGuessToHistory(guessColors, result){
-    const g = { id: uid(), colors: guessColors.slice(), bulls: result.bulls, cows: result.cows, ts: Date.now(), guessNumber: currentGuessNumber };
+    const g = { id: uid(), colors: guessColors.slice(), bulls: result.bulls, cows: result.cows, ts: Date.now() };
     guesses.unshift(g);
-    currentGuessNumber++; // העלאת מספר הניסיון להבא
     // שמור
     saveState();
     renderGuesses();
@@ -447,39 +408,26 @@
       row.className = 'guess-row';
       row.dataset.id = g.id;
       row.setAttribute('role','article');
-      const displayNumber = g.guessNumber || (guesses.length - guesses.indexOf(g));
-      row.setAttribute('aria-label', `ניסיון ${displayNumber}: ${g.colors.join(', ')} - בולים ${g.bulls} פגיעות ${g.cows}`);
-
-      // מספר הניסיון
-      const guessNumber = document.createElement('div');
-      guessNumber.className = 'guess-number';
-      // חישוב מספר הניסיון לניסיונות ישנים בלי מספר
-      const displayNumber = g.guessNumber || (guesses.length - guesses.indexOf(g));
-      guessNumber.textContent = displayNumber;
-
-      // אזור התוכן (צבעים + תוצאות)
-      const content = document.createElement('div');
-      content.className = 'guess-content';
-
-      const colorsList = document.createElement('div');
-      colorsList.className = 'guess-colors-list';
+      row.setAttribute('aria-label', `ניחוש: ${g.colors.join(', ')} - בולים ${g.bulls} פגיעות ${g.cows}`);
+      const left = document.createElement('div');
+      left.className = 'guess-colors-list';
       g.colors.forEach(c=>{
         const sp = document.createElement('span');
         sp.className = 'guess-color';
         sp.style.background = c;
-        colorsList.appendChild(sp);
+        left.appendChild(sp);
       });
 
-      const result = document.createElement('div');
-      result.className = 'result';
-      for(let i=0;i<g.bulls;i++){ const b=document.createElement('span'); b.className='bull'; result.appendChild(b); }
-      for(let i=0;i<g.cows;i++){ const c=document.createElement('span'); c.className='cow'; result.appendChild(c); }
+      const right = document.createElement('div');
+      right.className = 'result';
+      for(let i=0;i<g.bulls;i++){ const b=document.createElement('span'); b.className='bull'; right.appendChild(b); }
+      for(let i=0;i<g.cows;i++){ const c=document.createElement('span'); c.className='cow'; right.appendChild(c); }
 
-      content.appendChild(colorsList);
-      content.appendChild(result);
+      row.appendChild(left);
+      row.appendChild(right);
 
-      row.appendChild(guessNumber);
-      row.appendChild(content);
+      // הוספת gesture למחיקה: pointer events
+      attachSwipeToDelete(row, g.id);
 
       guessesDiv.appendChild(row);
     });
@@ -548,10 +496,6 @@
     startNewGame(true);
   });
 
-  clearAllBtn.addEventListener('click', ()=>{
-    clearAllData();
-  });
-
   // radio changes
   ballsCountRadios.forEach(r=>{
     r.addEventListener('change', ()=>{
@@ -572,63 +516,65 @@
     saveState();
   });
 
-  // ---- ניקוי מלא של localStorage וכל הנתונים ----
-  function clearAllData(){
-    try{
-      localStorage.removeItem(STORAGE_KEY);
-    }catch(e){ console.warn('clear localStorage failed', e); }
+  // ---- מחוות — החלקה למחיקה ----
+  function attachSwipeToDelete(node, id){
+    let startX=0, currentX=0, touching=false;
+    const threshold = 80; // פיקסלים למחק
+    function onPointerDown(e){
+      touching = true;
+      startX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+      node.style.transition = '';
+    }
+    function onPointerMove(e){
+      if(!touching) return;
+      currentX = (e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0) - startX;
+      node.style.transform = `translateX(${currentX}px)`;
+      node.style.opacity = `${Math.max(0, 1 - Math.abs(currentX)/200)}`;
+    }
+    function onPointerUp(e){
+      touching = false;
+      node.style.transition = 'transform 220ms ease, opacity 220ms ease';
+      if(Math.abs(currentX) > threshold){
+        node.classList.add('slide-out');
+        setTimeout(()=>{
+          guesses = guesses.filter(g => g.id !== id);
+          saveState();
+          renderGuesses();
+        }, 300);
+      } else {
+        node.style.transform = '';
+        node.style.opacity = '';
+      }
+      startX = currentX = 0;
+    }
 
-    // איפוס כל המשתנים
-    ballsCount = 4;
-    allowNoRepeat = false;
-    animationsEnabled = true;
-    secretCode = [];
-    currentGuess = [];
-    guesses = [];
-    revealed = [];
-    currentGuessNumber = 1;
-
-    // אתחול משחק חדש
-    startNewGame(true);
-
-    // עדכון מצב האנימציות
-    animToggle.textContent = 'פעיל';
-    animToggle.setAttribute('aria-pressed', 'true');
+    node.addEventListener('pointerdown', onPointerDown, {passive:true});
+    window.addEventListener('pointermove', onPointerMove, {passive:true});
+    window.addEventListener('pointerup', onPointerUp, {passive:true});
+    node.addEventListener('touchstart', onPointerDown, {passive:true});
+    node.addEventListener('touchmove', onPointerMove, {passive:true});
+    node.addEventListener('touchend', onPointerUp, {passive:true});
   }
-
-  // מחוות מחיקת ניסיון הוסרו לפי בקשת המשתמש
 
   // ---- אתחול משחק ----
   function startNewGame(forceNewSecret=false){
-    // יצירת סוד חדש אם נדרש
     if(!secretCode.length || forceNewSecret){
       secretCode = generateSecret(allowNoRepeat);
     }
-
-    // איפוס מצב הניחוש הנוכחי
     currentGuess = [];
     revealed = new Array(ballsCount).fill(false);
-
-    // עדכון UI בהתאם למצב נוכחי
     document.querySelectorAll('input[name="ballsCount"]').forEach(inp=>{
       inp.checked = Number(inp.value) === ballsCount;
     });
     noRepeatCheck.checked = allowNoRepeat;
-
-    // ניקוי היסטוריה רק אם מתחילים משחק חדש לגמרי
     if(forceNewSecret){
-      guesses = []; // מחיקת היסטוריית ניסיונות
-      currentGuessNumber = 1; // איפוס מספר הניסיון
+      guesses = [];
     }
-
-    // עדכון תצוגה
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
+    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length} ולחץ בדוק`;
     updateColorOptions();
     renderHintBalls();
     renderGuesses();
     renderCurrent();
-
-    // שמירת מצב חדש
     saveState();
   }
 
@@ -642,16 +588,9 @@
       secretCode = generateSecret(allowNoRepeat);
       guesses = [];
       revealed = new Array(ballsCount).fill(false);
-      currentGuessNumber = 1;
     } else {
       if(!revealed || revealed.length !== ballsCount) revealed = new Array(ballsCount).fill(false);
       if(!secretCode || secretCode.length !== ballsCount) secretCode = generateSecret(allowNoRepeat);
-      // וידוא שיש מספר ניסיון נוכחי תקין
-      if(!currentGuessNumber || currentGuessNumber < 1) {
-        // חישוב מספר הניסיון הבא על בסיס הניסיונות הקיימים
-        const maxGuessNumber = guesses.length > 0 ? Math.max(...guesses.map(g => g.guessNumber || 0)) : 0;
-        currentGuessNumber = maxGuessNumber + 1;
-      }
     }
     animToggle.textContent = animationsEnabled ? 'פעיל' : 'כבוי';
     animToggle.setAttribute('aria-pressed', animationsEnabled ? 'true' : 'false');
@@ -660,7 +599,7 @@
     renderHintBalls();
     renderGuesses();
     renderCurrent();
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
+    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length} ולחץ בדוק`;
   })();
 
   // ---- נקודות נגישות נוספות ----
