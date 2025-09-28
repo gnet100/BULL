@@ -214,7 +214,7 @@
         <h3>אפשרויות משחק</h3>
 
         <div class="box" id="ballsCountBox">
-          <legend style="font-weight:700; color:var(--muted); text-align:center;">מספר צבעים בסוד המחשב</legend>
+          <legend style="font-weight:700; color:var(--muted); text-align:center;">מספר צבעים במשחק</legend>
           <div class="balls-radio-group" role="radiogroup" aria-label="מספר צבעים">
             <label><input type="radio" name="ballsCount" value="2">2</label>
             <label><input type="radio" name="ballsCount" value="3">3</label>
@@ -224,7 +224,7 @@
 
         <div class="box" id="noRepeatChoiceBox" style="align-items:center; justify-content:space-between; flex-direction:row;">
           <label for="noRepeatCheck" style="font-weight:700; color:var(--muted);">בחירת צבעים שונים בלבד על ידי המחשב</label>
-          <input type="checkbox" id="noRepeatCheck" aria-label="ללא חזרות" />
+          <input type="checkbox" id="noRepeatCheck" aria-label="ללא חזרות" checked />
         </div>
 
         <div class="box" style="align-items:center;">
@@ -570,7 +570,7 @@
     if(forceNewSecret){
       guesses = [];
     }
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length} ולחץ בדוק`;
+    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
     updateColorOptions();
     renderHintBalls();
     renderGuesses();
@@ -583,7 +583,7 @@
     const loaded = loadState();
     if(!loaded){
       ballsCount = 4;
-      allowNoRepeat = false;
+      allowNoRepeat = true;
       animationsEnabled = true;
       secretCode = generateSecret(allowNoRepeat);
       guesses = [];
@@ -599,7 +599,7 @@
     renderHintBalls();
     renderGuesses();
     renderCurrent();
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length} ולחץ בדוק`;
+    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
   })();
 
   // ---- נקודות נגישות נוספות ----
