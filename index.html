@@ -401,37 +401,42 @@
   }
 
   // ---- רינדור היסטוריה ----
-  function renderGuesses(){
-    guessesDiv.innerHTML = '';
-    guesses.forEach(g=>{
-      const row = document.createElement('div');
-      row.className = 'guess-row';
-      row.dataset.id = g.id;
-      row.setAttribute('role','article');
-      row.setAttribute('aria-label', `ניחוש: ${g.colors.join(', ')} - בולים ${g.bulls} פגיעות ${g.cows}`);
-      const left = document.createElement('div');
-      left.className = 'guess-colors-list';
-      g.colors.forEach(c=>{
-        const sp = document.createElement('span');
-        sp.className = 'guess-color';
-        sp.style.background = c;
-        left.appendChild(sp);
-      });
+ function renderGuesses(){
+  guessesDiv.innerHTML = '';
+  guesses.forEach((g, index)=>{
+    const row = document.createElement('div');
+    row.className = 'guess-row';
+    row.dataset.id = g.id;
+    row.setAttribute('role','article');
+    row.setAttribute('aria-label', `ניחוש: ${g.colors.join(', ')} - בולים ${g.bulls} פגיעות ${g.cows}`);
 
-      const right = document.createElement('div');
-      right.className = 'result';
-      for(let i=0;i<g.bulls;i++){ const b=document.createElement('span'); b.className='bull'; right.appendChild(b); }
-      for(let i=0;i<g.cows;i++){ const c=document.createElement('span'); c.className='cow'; right.appendChild(c); }
-
-      row.appendChild(left);
-      row.appendChild(right);
-
-      // הוספת gesture למחיקה: pointer events
-      attachSwipeToDelete(row, g.id);
-
-      guessesDiv.appendChild(row);
+    const left = document.createElement('div');
+    left.className = 'guess-colors-list';
+    g.colors.forEach(c=>{
+      const sp = document.createElement('span');
+      sp.className = 'guess-color';
+      sp.style.background = c;
+      left.appendChild(sp);
     });
-  }
+
+    const attemptNumber = document.createElement('div');
+    attemptNumber.style = 'margin-left: 1rem; font-weight:700; color: var(--muted); user-select:none;'; // שינוי ל-margin-left
+    attemptNumber.textContent = (index + 1);
+
+    const right = document.createElement('div');
+    right.className = 'result';
+    for(let i=0;i<g.bulls;i++){ const b=document.createElement('span'); b.className='bull'; right.appendChild(b); }
+    for(let i=0;i<g.cows;i++){ const c=document.createElement('span'); c.className='cow'; right.appendChild(c); }
+    
+    row.appendChild(attemptNumber); // הכי ראשון בשורה, בימין (RTL)
+    row.appendChild(left);
+    row.appendChild(right);
+
+    guessesDiv.appendChild(row);
+  });
+}
+
+
 
   // ---- מציג רמזים ----
   function renderHintBalls(){
@@ -515,46 +520,6 @@
     animToggle.setAttribute('aria-pressed', animationsEnabled ? 'true' : 'false');
     saveState();
   });
-
-  // ---- מחוות — החלקה למחיקה ----
-  function attachSwipeToDelete(node, id){
-    let startX=0, currentX=0, touching=false;
-    const threshold = 80; // פיקסלים למחק
-    function onPointerDown(e){
-      touching = true;
-      startX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
-      node.style.transition = '';
-    }
-    function onPointerMove(e){
-      if(!touching) return;
-      currentX = (e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0) - startX;
-      node.style.transform = `translateX(${currentX}px)`;
-      node.style.opacity = `${Math.max(0, 1 - Math.abs(currentX)/200)}`;
-    }
-    function onPointerUp(e){
-      touching = false;
-      node.style.transition = 'transform 220ms ease, opacity 220ms ease';
-      if(Math.abs(currentX) > threshold){
-        node.classList.add('slide-out');
-        setTimeout(()=>{
-          guesses = guesses.filter(g => g.id !== id);
-          saveState();
-          renderGuesses();
-        }, 300);
-      } else {
-        node.style.transform = '';
-        node.style.opacity = '';
-      }
-      startX = currentX = 0;
-    }
-
-    node.addEventListener('pointerdown', onPointerDown, {passive:true});
-    window.addEventListener('pointermove', onPointerMove, {passive:true});
-    window.addEventListener('pointerup', onPointerUp, {passive:true});
-    node.addEventListener('touchstart', onPointerDown, {passive:true});
-    node.addEventListener('touchmove', onPointerMove, {passive:true});
-    node.addEventListener('touchend', onPointerUp, {passive:true});
-  }
 
   // ---- אתחול משחק ----
   function startNewGame(forceNewSecret=false){
