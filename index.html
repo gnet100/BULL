@@ -184,16 +184,7 @@
 <body>
   <div class="app">
     <div class="container" role="application" aria-label="משחק בול ופגיעה">
-      <!-- Hint & Reset (יופיע מעל בנייד כי ישתי column-reverse) -->
-      <div id="hintBoxOuter" style="display:flex; flex-direction:column; gap:0.6rem; align-items:stretch; min-width:220px;">
-        <div id="hintBox" aria-live="polite">
-          <div id="hintTitle" style="font-weight:700; color:var(--muted); text-align:center;">רמז</div>
-          <div class="hint-balls" id="hintBalls" role="list" aria-label="כדורי רמז"></div>
-        </div>
-        <button id="resetBtn" class="primary" aria-label="התחל מחדש">התחל מחדש</button>
-      </div>
-
-      <!-- Game Board -->
+        <!-- Game Board -->
       <main id="gameBoard" aria-labelledby="status" role="region">
         <div id="status" aria-live="polite">טוען...</div>
 
@@ -223,7 +214,7 @@
         </div>
 
         <div class="box" id="noRepeatChoiceBox" style="align-items:center; justify-content:space-between; flex-direction:row;">
-          <label for="noRepeatCheck" style="font-weight:700; color:var(--muted);">בחירת צבעים שונים בלבד על ידי המחשב</label>
+          <label for="noRepeatCheck" style="font-weight:700; color:var(--muted);">צבעים שונים</label>
           <input type="checkbox" id="noRepeatCheck" aria-label="ללא חזרות" checked />
         </div>
 
@@ -232,8 +223,17 @@
           <div style="display:flex; gap:0.5rem;">
             <button id="animToggle" class="ghost" aria-pressed="true">פעיל</button>
           </div>
+        </div>   
+        
+        <!-- תיבת רמז בסטייל של אפשרויות המשחק -->
+       <div class="box" id="hintBoxOuter" style="align-items:center;">
+          <div id="hintBox" aria-live="polite" style="background:none;box-shadow:none;">
+            <div id="hintTitle" style="font-weight:700; color:var(--muted); text-align:center;">רמז</div>
+            <div class="hint-balls" id="hintBalls" role="list" aria-label="כדורי רמז"></div>
+          </div>
         </div>
 
+        <button id="resetBtn" class="primary" aria-label="התחל מחדש" style="margin-top:0.1em;width:100%;">התחל מחדש</button>
       </aside>
     </div>
   </div>
@@ -553,11 +553,13 @@ function startNewGame(forceNewSecret=false){
   saveState();
 }
 
-  // ---- טענת מצב אם קיים ----
- (function init(){
+// ---- טענת מצב אם קיים ----
+(function init(){
   const loaded = loadState();
+  // ברירת מחדל תמיד 4 כדורים, גם אם המצב לא נטען
+  ballsCount = 4;
+
   if(!loaded){
-    ballsCount = 4;
     allowNoRepeat = true;
     animationsEnabled = true;
     secretCode = generateSecret(allowNoRepeat);
@@ -567,6 +569,12 @@ function startNewGame(forceNewSecret=false){
     if(!revealed || revealed.length !== ballsCount) revealed = new Array(ballsCount).fill(false);
     if(!secretCode || secretCode.length !== ballsCount) secretCode = generateSecret(allowNoRepeat);
   }
+
+  // ודא שכל radiobutton מוצג לפי ballsCount
+  document.querySelectorAll('input[name="ballsCount"]').forEach(inp=>{
+    inp.checked = (Number(inp.value) === ballsCount);
+  });
+
   animToggle.textContent = animationsEnabled ? 'פעיל' : 'כבוי';
   animToggle.setAttribute('aria-pressed', animationsEnabled ? 'true' : 'false');
 
