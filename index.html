@@ -256,6 +256,7 @@
   let secretCode = [];
   let currentGuess = [];
   let guesses = []; // מערך של {colors:[], bulls, cows, id}
+  let attemptCounter = 0; // מונה הניסיונות הכולל
   let revealed = []; // רמזים חשופים
   let vibrationEnabled = true; // ניתן לשנות
 
@@ -393,22 +394,36 @@
 
   // ---- הוספת ניחוש להיסטוריה ----
   function pushGuessToHistory(guessColors, result){
-    const g = { id: uid(), colors: guessColors.slice(), bulls: result.bulls, cows: result.cows, ts: Date.now() };
-    guesses.unshift(g);
-    // שמור
-    saveState();
-    renderGuesses();
-  }
+  attemptCounter++; // נספר כל ניסיון חדש
+  const g = {
+    id: uid(),
+    colors: guessColors.slice(),
+    bulls: result.bulls,
+    cows: result.cows,
+    ts: Date.now(),
+    attemptNumber: attemptCounter // פה נשמר המספר הקבוע!
+  };
+  guesses.unshift(g);
+  saveState();
+  renderGuesses();
+}
 
   // ---- רינדור היסטוריה ----
  function renderGuesses(){
+  // לעדכן את טקסט הסטטוס עם תחילת רינדור ההיסטוריה
+  statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
+
   guessesDiv.innerHTML = '';
-  guesses.forEach((g, index)=>{
+  guesses.forEach((g)=>{
     const row = document.createElement('div');
     row.className = 'guess-row';
     row.dataset.id = g.id;
     row.setAttribute('role','article');
     row.setAttribute('aria-label', `ניחוש: ${g.colors.join(', ')} - בולים ${g.bulls} פגיעות ${g.cows}`);
+
+    const attemptNumber = document.createElement('div');
+    attemptNumber.style = 'margin-left: 1rem; font-weight:700; color: var(--muted); user-select:none; min-width:2.2em; text-align:center;';
+    attemptNumber.textContent = g.attemptNumber || '';
 
     const left = document.createElement('div');
     left.className = 'guess-colors-list';
@@ -419,24 +434,18 @@
       left.appendChild(sp);
     });
 
-    const attemptNumber = document.createElement('div');
-    attemptNumber.style = 'margin-left: 1rem; font-weight:700; color: var(--muted); user-select:none;'; // שינוי ל-margin-left
-    attemptNumber.textContent = (index + 1);
-
     const right = document.createElement('div');
     right.className = 'result';
     for(let i=0;i<g.bulls;i++){ const b=document.createElement('span'); b.className='bull'; right.appendChild(b); }
     for(let i=0;i<g.cows;i++){ const c=document.createElement('span'); c.className='cow'; right.appendChild(c); }
-    
-    row.appendChild(attemptNumber); // הכי ראשון בשורה, בימין (RTL)
+
+    row.appendChild(attemptNumber);
     row.appendChild(left);
     row.appendChild(right);
 
     guessesDiv.appendChild(row);
   });
 }
-
-
 
   // ---- מציג רמזים ----
   function renderHintBalls(){
@@ -521,51 +530,54 @@
     saveState();
   });
 
-  // ---- אתחול משחק ----
-  function startNewGame(forceNewSecret=false){
-    if(!secretCode.length || forceNewSecret){
-      secretCode = generateSecret(allowNoRepeat);
-    }
-    currentGuess = [];
-    revealed = new Array(ballsCount).fill(false);
-    document.querySelectorAll('input[name="ballsCount"]').forEach(inp=>{
-      inp.checked = Number(inp.value) === ballsCount;
-    });
-    noRepeatCheck.checked = allowNoRepeat;
-    if(forceNewSecret){
-      guesses = [];
-    }
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
-    updateColorOptions();
-    renderHintBalls();
-    renderGuesses();
-    renderCurrent();
-    saveState();
+ // ---- אתחול משחק ----
+function startNewGame(forceNewSecret=false){
+  if(!secretCode.length || forceNewSecret){
+    secretCode = generateSecret(allowNoRepeat);
   }
+  currentGuess = [];
+  revealed = new Array(ballsCount).fill(false);
+  document.querySelectorAll('input[name="ballsCount"]').forEach(inp=>{
+    inp.checked = Number(inp.value) === ballsCount;
+  });
+  noRepeatCheck.checked = allowNoRepeat;
+  if(forceNewSecret){
+    guesses = [];
+    attemptCounter = 0; // אפס את מונה הניסיונות כשמתחילים משחק חדש
+  }
+  statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
+  updateColorOptions();
+  renderHintBalls();
+  renderGuesses();
+  renderCurrent();
+  saveState();
+}
 
   // ---- טענת מצב אם קיים ----
-  (function init(){
-    const loaded = loadState();
-    if(!loaded){
-      ballsCount = 4;
-      allowNoRepeat = true;
-      animationsEnabled = true;
-      secretCode = generateSecret(allowNoRepeat);
-      guesses = [];
-      revealed = new Array(ballsCount).fill(false);
-    } else {
-      if(!revealed || revealed.length !== ballsCount) revealed = new Array(ballsCount).fill(false);
-      if(!secretCode || secretCode.length !== ballsCount) secretCode = generateSecret(allowNoRepeat);
-    }
-    animToggle.textContent = animationsEnabled ? 'פעיל' : 'כבוי';
-    animToggle.setAttribute('aria-pressed', animationsEnabled ? 'true' : 'false');
+ (function init(){
+  const loaded = loadState();
+  if(!loaded){
+    ballsCount = 4;
+    allowNoRepeat = true;
+    animationsEnabled = true;
+    secretCode = generateSecret(allowNoRepeat);
+    guesses = [];
+    revealed = new Array(ballsCount).fill(false);
+  } else {
+    if(!revealed || revealed.length !== ballsCount) revealed = new Array(ballsCount).fill(false);
+    if(!secretCode || secretCode.length !== ballsCount) secretCode = generateSecret(allowNoRepeat);
+  }
+  animToggle.textContent = animationsEnabled ? 'פעיל' : 'כבוי';
+  animToggle.setAttribute('aria-pressed', animationsEnabled ? 'true' : 'false');
 
-    updateColorOptions();
-    renderHintBalls();
-    renderGuesses();
-    renderCurrent();
-    statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length}`;
-  })();
+  updateColorOptions();
+  renderHintBalls();
+  renderGuesses();
+  renderCurrent();
+
+  // עדכון טקסט סטטוס בסיום אתחול
+  statusDiv.textContent = `בחר ${ballsCount} צבעים מתוך ${getAllowedColors(ballsCount).length} ולחץ בדוק`;
+})();
 
   // ---- נקודות נגישות נוספות ----
   document.addEventListener('keydown', (e)=>{
