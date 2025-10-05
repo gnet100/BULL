@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>בול פגיעה – המחשב מגלה (גרסה מתוקנת)</title>
+<style>
+:root{
+  --bg: linear-gradient(180deg,#eaf8ff,#fff);
+  --muted:#3a4752;
+  --accent:#ffd166;
+  --overlay-size:60vw;
+  --display-ms:120; /* ms per frame */
+  --fade-ms:40;
+  --pal-size:54px; /* palette dots */
+  --guess-size:110px; /* big guess circles */
+  --guess-small:56px;
+  --gap-tight:8px; /* reduced gaps */
+  --box-bg: rgba(235,241,248,0.85); /* מעט כהה יותר מהרקע הכללי */
+  --dashed-color: rgba(255,209,102,0.95);
+  --send-green-start:#35c061;
+  --send-green-end:#2aa44f;
+  /* גודל צ'יפים (עיגולי המשוב) = ~60% מגודל עיגולי ההיסטוריה (var(--guess-small)) */
+  --chip-size: calc(var(--guess-small) * 0.6);
+  --spacer-h:8px;
+}
+
+/* בסיסי */
+html,body{height:100%;margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:#102a43;direction:rtl}
+.container{max-width:1100px;margin:14px auto;padding:16px;box-sizing:border-box}
+.card{background:#fffef6;border-radius:14px;padding:16px;box-shadow:0 10px 28px rgba(20,30,60,0.06)}
+h1{margin:0 0 6px 0;font-size:22px}
+.lead{margin:6px 0 12px 0;color:var(--muted);font-size:15px}
+
+/* פלטה - מרווחים מצומצמים */
+.palette{display:flex;gap:var(--gap-tight);align-items:center;flex-wrap:wrap;padding:6px;margin-bottom:12px}
+.pal-dot{width:var(--pal-size);height:var(--pal-size);border-radius:50%;box-shadow:0 6px 12px rgba(0,0,0,0.06);cursor:pointer;transition:transform 120ms ease,box-shadow 120ms ease;border:0}
+.pal-dot:hover{transform:translateY(-4px) scale(1.02)}
+.pal-dot.selected{box-shadow:0 14px 28px rgba(0,0,0,0.12)}
+
+/* מסגרת מקווקו סביב שורת העיגולים הנבחרים */
+.user-selection-box{
+  border:4px dashed var(--dashed-color);
+  border-radius:14px;
+  padding:10px;
+  background: rgba(227,235,246,0.95); /* פנימי קצת יותר כהה מרקע הדף */
+  margin-bottom:12px;
+}
+.user-row{display:flex;gap:6px;justify-content:center} /* gap מצומצם */
+.user-slot{
+  width:var(--guess-size);
+  height:var(--guess-size);
+  border-radius:50%;
+  background:linear-gradient(180deg,#fff,#fbfbfb);
+  box-shadow:0 8px 18px rgba(0,0,0,0.06);
+  display:flex;align-items:center;justify-content:center;
+  transition:background 120ms ease,box-shadow 120ms ease;
+}
+.user-slot.empty{opacity:0.25;background:linear-gradient(180deg,#fff,#f6f6f6);box-shadow:inset 0 0 0 2px rgba(0,0,0,0.03)}
+
+/* guess group - קו מקווקו סביב כל 4 הניחושים (לא מסגרת נפרדת על כל עיגול) */
+.guess-group{
+  margin-top:8px;
+  display:flex;
+  gap:6px;
+  justify-content:center;
+  align-items:center;
+  padding:10px;
+  border:4px dashed var(--dashed-color);
+  border-radius:12px;
+  background:var(--box-bg);
+}
+.guess-slot{
+  width:calc(var(--guess-size) - 18px);
+  height:calc(var(--guess-size) - 18px);
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 14px rgba(0,0,0,0.06);
+}
+
+/* שורת צ'יפים מתחת לניחושים: גובה קבוע; צ'יפים מתחילים משמאל */
+.chips-row{height:28px;display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:8px;min-width:calc(var(--guess-size) - 18px)}
+.chip{width:var(--chip-size);height:var(--chip-size);border-radius:50%;box-shadow:0 3px 6px rgba(0,0,0,0.06);cursor:pointer}
+.chip.black{background:#111}
+.chip.white{background:#fff;border:1px solid rgba(0,0,0,0.06)}
+.chip.error{background:#ff3b30}
+
+/* spacer צר בין תיבת המשוב לניחושים */
+.spacer{height:var(--spacer-h);width:100%;margin:8px 0}
+
+/* feedback box - רקע כהה במקצת וקו מקווקו */
+.feedback-box{
+  margin-top:12px;
+  background: rgba(230,236,246,0.92);
+  border-radius:12px;
+  padding:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  justify-content:center;
+  border:4px dashed var(--dashed-color);
+  box-shadow:none;
+}
+
+/* כפתורי בול/פגיעה - סגנון רוחבי דומה ל'שלח' */
+.btn-wide {
+  /* מגייס מאפיינים דומים ל־.btn-send אך מאפשר שינוי צבע פנימי */
+  min-width: 180px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 18px;
+  box-shadow: 0 14px 36px rgba(0,0,0,0.12);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* גווני ברירת מחדל */
+.btn-wide.black {
+  background: linear-gradient(180deg,#111,#0b0b0b);
+  color: #fff;
+  border: 2px solid rgba(255,255,255,0.06);
+}
+.btn-wide.white {
+  background: linear-gradient(180deg,#fff,#f6f6f6);
+  color: #111;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+/* התאמות מיוחדות למצב hover/active */
+.btn-wide:hover { transform: translateY(-4px); box-shadow: 0 20px 46px rgba(0,0,0,0.14); }
+.btn-wide:active { transform: translateY(-1px); }
+
+/* אם תרצה לשמור מראה אחיד עם .btn-send */
+.btn-wide.small { min-width: 150px; padding: 12px 16px; font-size:16px; }
+
+/* (שמור .btn-send כקיים; הכפתור 'שלח' ישאר עם המחלקה .btn-send) */
+
+/* כפתור שלח גדול וצבעי ירוק */
+.btn-send{
+  background: linear-gradient(90deg,var(--send-green-start),var(--send-green-end));
+  color:#fff;padding:16px 22px;border-radius:12px;border:0;cursor:pointer;font-weight:900;font-size:18px;
+  box-shadow:0 14px 36px rgba(46,139,87,0.18);
+  transition:transform 160ms ease;
+}
+.btn-send:hover{transform:translateY(-6px)}
+
+/* היסטוריה (שחזור תצוגת עיגולים קטנים ומשוב) */
+.history{display:flex;flex-direction:column;gap:10px;max-height:36vh;overflow:auto;padding-right:6px;margin-top:12px}
+.history-row{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid rgba(0,0,0,0.03)}
+.history-row .meta{min-width:38px;font-weight:700}
+.history-guess{width:var(--guess-small);height:var(--guess-small);border-radius:50%;box-shadow:0 6px 14px rgba(0,0,0,0.06);}
+/* עיצוב עיגולי משוב עבור היסטוריה (שחורים/לבנים קטנים) */
+/* --- החלפה: עיצוב עיגולי המשוב בשורת ההיסטוריה (גדולים יותר) --- */
+.history-chips {
+  display:flex;
+  gap:10px;               /* יותר רווח בין העיגולים */
+  align-items:center;
+  margin-inline-start:12px;
+}
+
+/* גודל העיגולים בשורת ההיסטוריה = ~60% מגודל ה־history-guess (var(--guess-small)) */
+.history-chip {
+  width: calc(var(--guess-small) * 0.6);
+  height: calc(var(--guess-small) * 0.6);
+  border-radius:50%;
+  box-shadow:0 4px 8px rgba(0,0,0,0.08);
+  flex: 0 0 auto;
+}
+.history-chip.black{ background:#111; }
+.history-chip.white{ background:#fff; border:1px solid rgba(0,0,0,0.06); }
+
+.history-chip {
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  box-shadow:0 3px 6px rgba(0,0,0,0.06);
+}
+.history-chip.black{ background:#111; }
+.history-chip.white{ background:#fff; border:1px solid rgba(0,0,0,0.06); }
+
+/* overlay חשיבה */
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,20,0.35);z-index:1200;opacity:0;pointer-events:none;transition:opacity 160ms ease}
+.overlay.show{opacity:1;pointer-events:auto}
+.think-circle{width:var(--overlay-size);height:var(--overlay-size);background:var(--box-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;box-shadow:0 18px 48px rgba(0,0,0,0.12);position:relative;border:4px dashed var(--dashed-color)}
+.think-dot{width:45%;height:45%;border-radius:50%;box-shadow:0 14px 32px rgba(0,0,0,0.12);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(0.98);transition:opacity 120ms ease,transform 120ms ease}
+.think-caption{position:absolute;bottom:12px;font-weight:700;color:#274060}
+
+/* fireworks */
+.fireworks{position:fixed;inset:0;pointer-events:none;z-index:1800;overflow:visible}
+.fw-particle{position:absolute;border-radius:50%;opacity:0;mix-blend-mode:screen}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#111;color:#fff;padding:8px 12px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity 220ms ease,transform 220ms ease}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+
+@media (max-width:720px){
+  :root{
+    --pal-size:44px;
+    --guess-size:84px;
+    --guess-small:48px;
+    /* עדכון גודל הצ'יפים גם במצב מובייל בהתאם לגודל הקטן יותר */
+    --chip-size: calc(var(--guess-small) * 0.6);
+  }
+  .big-rect{height:68px}
+  .btn-send{padding:12px 16px;font-size:16px}
+}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>בול פגיעה – המחשב מגלה</h1>
+      <div class="lead" id="leadText">בחר 4 עיגולים מתוך 6 — המחשב ינסה לנחש, ותתן משוב.</div>
+
+      <!-- פלטת עיגולים -->
+      <div class="palette" id="palette"></div>
+
+      <!-- שורת הבחירה (מולאת במלבן מקווקו) -->
+      <div class="user-selection-box" id="userSelectionBox" aria-label="השורה שלך">
+        <div class="user-row" id="userRow">
+          <div class="user-slot empty" data-pos="0"></div>
+          <div class="user-slot empty" data-pos="1"></div>
+          <div class="user-slot empty" data-pos="2"></div>
+          <div class="user-slot empty" data-pos="3"></div>
+        </div>
+      </div>
+
+      <!-- קבוצה של 4 ניחושים מסודרת (מסגרת מקווקו קבוצתית) -->
+      <div class="guess-group" id="guessGroup" aria-label="ניחושי המחשב">
+        <div class="guess-slot" data-pos="0"></div>
+        <div class="guess-slot" data-pos="1"></div>
+        <div class="guess-slot" data-pos="2"></div>
+        <div class="guess-slot" data-pos="3"></div>
+      </div>
+
+      <!-- שורת צ'יפים (אחד לכל מיקום). צ'יפים יתחילו מימין בעזרת הצגה לצורך הקשר, אך ערימת הצ'יפים מוסיפה משמאל כפי שביקשת -->
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:8px">
+        <div class="chips-row" data-pos="0"></div>
+        <div class="chips-row" data-pos="1"></div>
+        <div class="chips-row" data-pos="2"></div>
+        <div class="chips-row" data-pos="3"></div>
+      </div>
+
+      <!-- רווח צר -->
+      <div class="spacer"></div>
+
+      <!-- תיבת המשוב (בול/פגיעה/שלח) -->
+      <div class="feedback-box" id="feedbackBox">
+        <button class="btn-wide black" id="btnBull" type="button">בול</button>
+        <button class="btn-wide white" id="btnHit" type="button">פגיעה</button>
+        <button class="btn-send" id="btnSend" type="button">שלח</button>
+
+      </div>
+
+      <!-- סטטוס וספירה -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+        <div style="color:var(--muted);font-size:14px">תן משוב אחרי כל ניחוש</div>
+        <div style="color:var(--muted);font-size:14px"><strong id="remainCount">0</strong> צירופים אפשריים נותרו</div>
+      </div>
+
+      <!-- היסטוריה -->
+      <div class="history" id="history"></div>
+
+    </div>
+  </div>
+
+  <!-- overlay חשיבה -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="think-circle" role="status" aria-live="polite">
+      <div class="think-dot" id="thinkDot"></div>
+      <div class="think-caption">המחשב חושב...</div>
+    </div>
+  </div>
+
+  <div class="fireworks" id="fireworks"></div>
+  <div class="toast" id="toast">הודעה</div>
+
+<script>
+/* לוגיקה מתוקנת — תשומת לב לפרטים שביקשת */
+(function(){
+  const COLORS = ["#ff6b6b","#ffd166","#06d6a0","#4d96ff","#9f7aea","#ff9f62"];
+  const paletteEl = document.getElementById('palette');
+  const leadText = document.getElementById('leadText');
+  const userSlots = Array.from(document.querySelectorAll('.user-slot'));
+  const guessSlots = Array.from(document.querySelectorAll('.guess-slot'));
+  const chipsRows = Array.from(document.querySelectorAll('.chips-row'));
+  const guessGroup = document.getElementById('guessGroup');
+  const btnBull = document.getElementById('btnBull');
+  const btnHit = document.getElementById('btnHit');
+  const btnSend = document.getElementById('btnSend');
+  const remainCountEl = document.getElementById('remainCount');
+  const historyEl = document.getElementById('history');
+  const overlay = document.getElementById('overlay');
+  const thinkDot = document.getElementById('thinkDot');
+  const fireworksContainer = document.getElementById('fireworks');
+  const toast = document.getElementById('toast');
+
+  let currentSelection = []; // indices chosen by user, order = positions 0..3
+  let candidates = [];
+  let history = [];
+  let lastGuess = null;
+  let attemptCount = 0;
+  let thinking = false;
+
+  /* Audio: ensure init on first user gesture so first click has sound */
+  let audioCtx = null;
+  let audioInitialized = false;
+  function initAudio(){
+    try{
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }catch(e){
+      audioCtx = null;
+    }
+    audioInitialized = true;
+  }
+  function playTone(freq, dur=80){
+    if(!audioInitialized) return;
+    if(!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.value = 0.06;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur/1000);
+    o.stop(audioCtx.currentTime + dur/1000 + 0.02);
+  }
+  function soundClick(){ playTone(880,60); }
+  function soundError(){ playTone(220,200); }
+  function soundSuccess(){ playTone(1000,240); }
+
+  function flashToast(text, ms=1000){ toast.textContent = text; toast.classList.add('show'); setTimeout(()=> toast.classList.remove('show'), ms); }
+
+  /* בניית הפלטה */
+  function createPalette(){
+    paletteEl.innerHTML = '';
+    COLORS.forEach((hex, idx) => {
+      const d = document.createElement('div');
+      d.className = 'pal-dot';
+      d.style.background = hex;
+      d.dataset.idx = idx;
+      d.addEventListener('click', (ev) => onPaletteClick(idx, d, ev));
+      paletteEl.appendChild(d);
+    });
+  }
+
+  /* On first user gesture: init audio so first click plays */
+  function ensureAudioOnGesture(){
+    if(!audioInitialized){
+      initAudio();
+      // resume context on browsers requiring gesture
+      if(audioCtx && typeof audioCtx.resume === 'function') audioCtx.resume();
+    }
+  }
+
+  function onPaletteClick(idx, el, ev){
+    ensureAudioOnGesture(); // init audio immediately on first click
+    // now play click
+    soundClick();
+
+    if(currentSelection.includes(idx)){ flashToast('הצבע כבר נבחר'); return; }
+    if(currentSelection.length >= 4){ flashToast('כבר נבחרו 4'); return; }
+    currentSelection.push(idx);
+    refreshSelectionUI();
+    if(currentSelection.length === 4){
+      // הסתרת הפלטה והטקסט
+      paletteEl.style.display = 'none';
+      leadText.style.display = 'none';
+      startCandidates();
+      setTimeout(()=> startThinkingAndGuess(), 180);
+    }
+  }
+
+  function refreshSelectionUI(){
+    for(let pos=0; pos<4; pos++){
+      const slot = userSlots[pos];
+      if(currentSelection[pos] !== undefined){
+        slot.classList.remove('empty');
+        slot.style.background = COLORS[currentSelection[pos]];
+        slot.style.boxShadow = '0 12px 28px rgba(0,0,0,0.12)';
+      } else {
+        slot.classList.add('empty');
+        slot.style.background = '';
+        slot.style.boxShadow = '0 8px 18px rgba(0,0,0,0.06)';
+      }
+    }
+  }
+
+  /* מועמדים - כל פרמוטציות ללא חזרות */
+  function generateCandidates(){
+    const idxs = Array.from(Array(COLORS.length).keys());
+    const res = [];
+    function perm(arr,k,path){
+      if(path.length===k){ res.push(path.slice()); return; }
+      for(let i=0;i<arr.length;i++){ const v=arr[i]; const rem=arr.slice(0,i).concat(arr.slice(i+1)); path.push(v); perm(rem,k,path); path.pop(); }
+    }
+    perm(idxs,4,[]);
+    return res;
+  }
+
+  function startCandidates(){
+    candidates = generateCandidates();
+    history = [];
+    lastGuess = null;
+    attemptCount = 0;
+    updateCounts();
+    renderHistory();
+    clearAllChips();
+    clearGuessSlots();
+  }
+
+  function updateCounts(){ remainCountEl.textContent = candidates.length; }
+
+  function computeFeedback(secret, guess){
+    let exact = 0;
+    const sc = {}, gc = {};
+    for(let i=0;i<secret.length;i++){
+      if(secret[i] === guess[i]) exact++;
+      sc[secret[i]] = (sc[secret[i]]||0) + 1;
+      gc[guess[i]] = (gc[guess[i]]||0) + 1;
+    }
+    let common = 0;
+    for(const k in sc) if(gc[k]) common += Math.min(sc[k], gc[k]);
+    return { exact, colorOnly: common - exact };
+  }
+
+  function pickGuess(){ if(candidates.length===0) return null; return candidates[Math.floor(Math.random()*candidates.length)].slice(); }
+
+  /* אנימצית חשיבה */
+  const SEQ_LEN = 12;
+  const DISPLAY_MS = Number(getComputedStyle(document.documentElement).getPropertyValue('--display-ms')) || 120;
+  const FADE_MS = Number(getComputedStyle(document.documentElement).getPropertyValue('--fade-ms')) || 40;
+
+  function startThinkingAndGuess(){
+    if(thinking) return;
+    if(currentSelection.length !== 4) return;
+    if(candidates.length === 0){ flashToast('אין צירופים אפשריים — בדוק את המשוב'); return; }
+    thinking = true;
+    lastGuess = pickGuess();
+    attemptCount++;
+    const seq = [];
+    for(let i=0;i<SEQ_LEN;i++){
+      let c = Math.floor(Math.random()*COLORS.length);
+      let t=0;
+      while(i>0 && c===seq[i-1] && t<10){ c=Math.floor(Math.random()*COLORS.length); t++; }
+      seq.push(c);
+    }
+    showOverlaySequence(seq, ()=> { thinking = false; renderGuessGroup(lastGuess); });
+  }
+
+  function showOverlaySequence(seq, done){
+    overlay.classList.add('show');
+    let idx=0, total=seq.length;
+    thinkDot.style.opacity='0';
+    function step(){
+      if(idx>=total){
+        setTimeout(()=>{ overlay.classList.remove('show'); thinkDot.style.opacity='0'; setTimeout(()=> done && done(), 80); }, 30);
+        return;
+      }
+      const c = COLORS[seq[idx]];
+      thinkDot.style.background = c;
+      thinkDot.style.opacity = '1';
+      thinkDot.style.transform = 'scale(1.02)';
+      if(audioInitialized) soundClick();
+      setTimeout(()=>{ thinkDot.style.opacity = '0'; thinkDot.style.transform='scale(0.98)'; idx++; setTimeout(step, FADE_MS); }, DISPLAY_MS);
+    }
+    step();
+  }
+
+  /* ניקוי ניחושים וצ'יפים */
+  function clearGuessSlots(){
+    guessSlots.forEach(s => { s.innerHTML=''; s.style.background = 'transparent'; });
+  }
+  function clearAllChips(){
+    chipsRows.forEach(r => { while(r.firstChild) r.removeChild(r.firstChild); });
+  }
+
+  /* הצגת ניחוש: הצבעים יוצגו מימין לשמאל בתוך ה"קבוצת ניחוש" */
+  function renderGuessGroup(guess){
+    // clear
+    clearGuessSlots();
+    clearAllChips();
+    // להציג את הצבעים כך שמיקום 0 -> ימני ביותר (index 0 = rightmost)
+    // אנחנו מניחים currentSelection ו guess באורך 4, ונציג אותם בפוזיציות 0..3 (משמאל לימין ב־DOM) אך חזותית הם מיועדים להיות מימין
+    // נציב לפי data-pos כך שה־pos=0 הוא הימני ביותר מבחינת המשתמש (RTL), אבל DOM סדר אינו משנה מיקום פיזי מכיוון שזה מסודר בשורה.
+    // בפשטות: נציב כל צבע בפוזיציית עצמו (0..3) — הכיוון החזותי מתקבל מהסדר הוויזואלי שנבנה כבר ב-CSS (המשתמש רגיל ל-RTL).
+    for(let pos=0; pos<4; pos++){
+      const colorIdx = guess[pos];
+      const slot = document.querySelector(`.guess-slot[data-pos="${pos}"]`);
+      slot.innerHTML = '';
+      const circle = document.createElement('div');
+      circle.style.width = '100%';
+      circle.style.height = '100%';
+      circle.style.borderRadius = '50%';
+      circle.style.background = COLORS[colorIdx];
+      circle.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+      slot.appendChild(circle);
+    }
+    // לאחר הצגת הניחוש, נשארים הצ'יפים ריקים; המשתמש לוחץ בול/פגיעה כדי למלא צ'יפים
+  }
+
+  /* הוספת צ'יפ למיקום ראשון פנוי משמאל (כפי שביקשת - צ'יפים מתחילים משמאל). */
+  function addChipGlobal(color){
+    for(let pos=0; pos<4; pos++){
+      const row = document.querySelector(`.chips-row[data-pos="${pos}"]`);
+      const count = Array.from(row.children).filter(c=>c.dataset.color===color).length;
+      if(count < 4){
+        const chip = document.createElement('div');
+        chip.className = 'chip ' + (color==='black' ? 'black' : 'white');
+        chip.dataset.color = color;
+        row.appendChild(chip);
+        chip.addEventListener('click', ()=> { if(chip.parentNode) chip.parentNode.removeChild(chip); });
+        return;
+      }
+    }
+  }
+
+  /* איסוף המשוב מכל הצ'יפים */
+  function collectFeedbackFromChips(){
+    const all = document.querySelectorAll('.chips-row .chip');
+    let exact=0, colorOnly=0;
+    all.forEach(c => { if(c.dataset.color === 'black') exact++; else colorOnly++; });
+    return { exact, colorOnly };
+  }
+
+  /* כפתורי בול/פגיעה המרכזיים */
+  btnBull.addEventListener('click', ()=> { ensureAudioOnGesture(); if(audioInitialized) soundClick(); addChipGlobal('black'); });
+  btnHit.addEventListener('click', ()=> { ensureAudioOnGesture(); if(audioInitialized) soundClick(); addChipGlobal('white'); });
+
+  /* לחצן שלח - אימות המשוב */
+  btnSend.addEventListener('click', ()=> {
+    ensureAudioOnGesture();
+    if(audioInitialized) soundClick();
+    const fb = collectFeedbackFromChips();
+    if(fb.exact + fb.colorOnly > 4){
+      document.querySelectorAll('.chips-row .chip').forEach(ch=> ch.classList.add('error'));
+      setTimeout(()=> clearAllChips(), 2000);
+      if(audioInitialized) soundError();
+      return;
+    }
+    const trueFb = computeFeedback(currentSelection, lastGuess);
+    if(trueFb.exact !== fb.exact || trueFb.colorOnly !== fb.colorOnly){
+      document.querySelectorAll('.chips-row .chip').forEach(ch=> ch.classList.add('error'));
+      setTimeout(()=> clearAllChips(), 2000);
+      if(audioInitialized) soundError();
+      return;
+    }
+    // סינון מועמדים
+    const valid = candidates.filter(cand => {
+      const t = computeFeedback(cand, lastGuess);
+      return t.exact === fb.exact && t.colorOnly === fb.colorOnly;
+    });
+    if(valid.length === 0){
+      flashToast('לא נמצאו צירופים אחרי הסינון');
+      if(audioInitialized) soundError();
+      return;
+    }
+    history.unshift({ guess: lastGuess.slice(), exact: fb.exact, colorOnly: fb.colorOnly, solved: fb.exact===4 });
+    candidates = valid;
+    updateCounts();
+    renderHistory();
+    if(fb.exact === 4){
+      if(audioInitialized) soundSuccess();
+      showVictoryWithFireworks();
+      return;
+    }
+    clearAllChips();
+    setTimeout(()=> startThinkingAndGuess(), 420);
+  });
+
+ function renderHistory(){
+  historyEl.innerHTML = '';
+  history.forEach((entry, idx) => {
+    const row = document.createElement('div'); row.className = 'history-row';
+    const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = history.length - idx;
+    row.appendChild(meta);
+
+    // הצגת החיזוי (עיגולי צבעים קטנים)
+    entry.guess.forEach(i => {
+      const g = document.createElement('div');
+      g.className = 'history-guess';
+      g.style.background = COLORS[i];
+      row.appendChild(g);
+    });
+
+    // במקום טקסט של מספרים - הצג עיגולי משוב (שחורים/לבנים) לפי המשוב שהתקבל
+    const chipsContainer = document.createElement('div');
+    chipsContainer.className = 'history-chips';
+
+    // fallback: השתמש בסכום ה־exact (בול) וה־colorOnly (פגיעה) כדי להציג עיגולים
+    // נציג קודם את הבולים (שחורים) ואז הפגיעות (לבנים)
+    for(let b=0;b<(entry.exact||0);b++){
+      const hc = document.createElement('div');
+      hc.className = 'history-chip black';
+      chipsContainer.appendChild(hc);
+    }
+    for(let p=0;p<(entry.colorOnly||0);p++){
+      const hc = document.createElement('div');
+      hc.className = 'history-chip white';
+      chipsContainer.appendChild(hc);
+    }
+
+    row.appendChild(chipsContainer);
+
+    if(entry.solved){
+      const solved = document.createElement('div'); solved.style.marginInlineStart='12px'; solved.style.color='#0a8d48'; solved.style.fontWeight='800'; solved.textContent='נחשף!';
+      row.appendChild(solved);
+    }
+    historyEl.appendChild(row);
+  });
+}
+
+  /* ניצחון + זיקוקים */
+  function showVictoryWithFireworks(){
+    // הצגה של מסר ונקודת התחלה מחדש בתוך guessGroup
+    guessGroup.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.flexDirection='column'; wrap.style.alignItems='center'; wrap.style.gap='12px';
+    const msg = document.createElement('div'); msg.style.fontSize='20px'; msg.style.color='#0a8d48'; msg.textContent='המחשב גילה את הסדרה! 🎉';
+    const restart = document.createElement('button'); restart.className = 'btn-send'; restart.textContent = 'התחל מחדש';
+    restart.addEventListener('click', ()=> resetGame());
+    wrap.appendChild(msg); wrap.appendChild(restart);
+    guessGroup.appendChild(wrap);
+    launchFireworks();
+  }
+
+  function launchFireworks(){
+    const colorsF = ["#ff6b6b","#ffd166","#06d6a0","#4d96ff","#9f7aea","#fff475"];
+    for(let i=0;i<10;i++) createBurst(window.innerWidth * Math.random()*0.8 + window.innerWidth*0.1, window.innerHeight * (0.2 + Math.random()*0.5), colorsF[Math.floor(Math.random()*colorsF.length)]);
+    setTimeout(()=> { fireworksContainer.innerHTML = ''; }, 3500);
+  }
+  function createBurst(x,y,color){
+    const pieces = 14 + Math.floor(Math.random()*8);
+    for(let i=0;i<pieces;i++){
+      const p = document.createElement('div'); p.className = 'fw-particle';
+      const size = 6 + Math.floor(Math.random()*10);
+      p.style.width = p.style.height = size + 'px';
+      p.style.background = color;
+      p.style.left = (x - size/2) + 'px';
+      p.style.top = (y - size/2) + 'px';
+      const angle = Math.random()*Math.PI*2;
+      const dist = 80 + Math.random()*220;
+      const dx = Math.cos(angle)*dist;
+      const dy = -Math.abs(Math.sin(angle))*dist*0.9 - 20;
+      p.style.transition = `transform ${900 + Math.random()*600}ms cubic-bezier(.22,.9,.38,1), opacity ${900 + Math.random()*600}ms linear`;
+      fireworksContainer.appendChild(p);
+      requestAnimationFrame(()=> { p.style.transform = `translate(${dx}px, ${dy}px) scale(${0.6+Math.random()*1.2})`; p.style.opacity = '0'; });
+      setTimeout(()=> { if(p.parentNode) p.parentNode.removeChild(p); }, 2000 + Math.random()*1200);
+    }
+  }
+
+  function resetGame(){
+    currentSelection = []; candidates = []; history = []; lastGuess = null; attemptCount = 0; thinking = false;
+    paletteEl.style.display = 'flex'; leadText.style.display = 'block';
+    createPalette(); refreshSelectionUI(); clearAllChips(); clearGuessSlots();
+    guessGroup.innerHTML = '';
+    // rebuild guess slots
+    for(let p=0;p<4;p++){
+      const s = document.createElement('div'); s.className='guess-slot'; s.dataset.pos = p;
+      guessGroup.appendChild(s);
+    }
+    // rebuild chips rows (easiest: reload)
+    const chipsContainer = document.querySelectorAll('.chips-row');
+    chipsContainer.forEach(r => { while(r.firstChild) r.removeChild(r.firstChild); });
+    updateCounts(); renderHistory();
+  }
+
+  /* init */
+  function init(){
+    createPalette();
+    refreshSelectionUI();
+    updateCounts();
+  }
+  init();
+
+})();
+</script>
+</body>
+</html>
